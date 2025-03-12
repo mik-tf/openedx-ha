@@ -1,6 +1,6 @@
 # Open edX High Availability Kubernetes Deployment
 
-This project provides a complete solution for deploying Open edX in a high-availability configuration using Kubernetes (k3s) on a homemade cluster with Mycelium IPv6 networking.
+This project provides a complete solution for deploying Open edX in a high-availability configuration using Kubernetes (k3s) on a 4-node cluster with Mycelium IPv6 networking.
 
 ## Architecture
 
@@ -23,7 +23,8 @@ The deployment consists of:
 
 ## Prerequisites
 
-- 4 mini PCs with IPv6 connectivity via Mycelium
+- 4 mini Ubuntu 24.04 PCs with IPv6 connectivity via Mycelium
+  - For more information consult this [Mycelium cluster repo](https://github.com/mik-tf/mcluster) and this [ISO Boot Maker repo](https://github.com/mik-tf/isobootmaker)
 - SSH access to all nodes
 - A domain name with access to DNS settings
 - Basic understanding of Kubernetes concepts
