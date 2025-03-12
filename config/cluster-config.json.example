@@ -7,7 +7,7 @@
       "user": "admin",
       "role": "master+worker",
       "is_first_master": true,
-      "ssh_key_path": "~/.ssh/id_rsa"
+      "ssh_key_path": "~/.ssh/id_ed25519"
     },
     {
       "name": "node2",
@@ -15,7 +15,7 @@
       "user": "admin",
       "role": "master+worker",
       "is_first_master": false,
-      "ssh_key_path": "~/.ssh/id_rsa"
+      "ssh_key_path": "~/.ssh/id_ed25519"
     },
     {
       "name": "node3",
@@ -23,14 +23,14 @@
       "user": "admin",
       "role": "master+worker",
       "is_first_master": false,
-      "ssh_key_path": "~/.ssh/id_rsa"
+      "ssh_key_path": "~/.ssh/id_ed25519"
     },
     {
       "name": "node4",
       "ipv6": "2001:db8:1::4",
       "user": "admin",
       "role": "backup",
-      "ssh_key_path": "~/.ssh/id_rsa"
+      "ssh_key_path": "~/.ssh/id_ed25519"
     }
   ],
   "couchdb": {
