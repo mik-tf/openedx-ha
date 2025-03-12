@@ -18,6 +18,10 @@ COUCHDB_USER=$(jq -r '.couchdb.user' "$CONFIG_FILE")
 COUCHDB_PASSWORD=$(jq -r '.couchdb.password' "$CONFIG_FILE")
 PLATFORM_NAME=$(jq -r '.platform_name' "$CONFIG_FILE")
 PLATFORM_EMAIL=$(jq -r '.platform_email' "$CONFIG_FILE")
+# Get backup node name
+BACKUP_NODE_NAME=$(jq -r '.nodes[] | select(.is_backup==true) | .name' "$CONFIG_FILE")
+# Update the backup-pv.yaml file with the backup node name
+sed -i "s/\${BACKUP_NODE_NAME}/$BACKUP_NODE_NAME/g" "$PARENT_DIR/kubernetes/backup/backup-pv.yaml"
 
 # Create secrets.yaml for CouchDB
 echo "Creating CouchDB secrets..."

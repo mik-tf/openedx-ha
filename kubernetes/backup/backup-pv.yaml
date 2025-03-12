@@ -20,4 +20,4 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - node4 # This should be the hostname of your backup node
+                - ${BACKUP_NODE_NAME} # This will be replaced with actual backup node name

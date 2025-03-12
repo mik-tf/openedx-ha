@@ -58,8 +58,12 @@ ssh -i "$MASTER_KEY" "$MASTER_USER@$MASTER_IPV6" "sudo cat /etc/rancher/k3s/k3s.
 # Update the server address in the kubeconfig
 sed -i "s/127.0.0.1/$MASTER_IPV6/g" ~/.kube/config
 
+# In deploy.sh, before applying Kubernetes manifests:
+echo "Step 5: Generating dynamic Kubernetes manifests..."
+"$SCRIPT_DIR/scripts/generate-configs.sh" "$CONFIG_FILE"
+
 # Apply Kubernetes manifests
-echo "Step 5: Applying Kubernetes manifests..."
+echo "Step 6: Applying Kubernetes manifests..."
 kubectl apply -f "$SCRIPT_DIR/kubernetes/namespace.yaml"
 kubectl apply -f "$SCRIPT_DIR/kubernetes/storage/"
 kubectl apply -f "$SCRIPT_DIR/kubernetes/couchdb/"

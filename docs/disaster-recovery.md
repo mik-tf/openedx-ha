@@ -1,6 +1,6 @@
 # Disaster Recovery Guide
 
-This guide outlines procedures for recovering your Open edX platform in case of catastrophic infrastructure failure.
+This guide outlines procedures for recovering your Open edX platform in case of catastrophic infrastructure failure. The system is designed with zero single points of failure (SPOF), but proper disaster recovery procedures are still essential.
 
 ## Complete Infrastructure Loss Recovery
 
@@ -25,12 +25,41 @@ Use this procedure when all nodes are lost, but you have local PC backups availa
          "name": "node1-new",
          "ipv6": "2001:db8:1::10",
          "user": "admin",
-         "role": "master",
+         "role": "master+worker",
+         "is_first_master": true,
          "ssh_key_path": "~/.ssh/id_rsa"
        },
-       ...
+       {
+         "name": "node2-new",
+         "ipv6": "2001:db8:2::10",
+         "user": "admin",
+         "role": "master+worker",
+         "is_first_master": false,
+         "ssh_key_path": "~/.ssh/id_rsa"
+       },
+       {
+         "name": "node3-new",
+         "ipv6": "2001:db8:3::10",
+         "user": "admin",
+         "role": "master+worker",
+         "is_first_master": false,
+         "ssh_key_path": "~/.ssh/id_rsa"
+       },
+       {
+         "name": "node4-new",
+         "ipv6": "2001:db8:4::10",
+         "user": "admin",
+         "role": "backup",
+         "is_backup": true,
+         "ssh_key_path": "~/.ssh/id_rsa"
+       }
      ],
-     ...
+     "couchdb": {
+       "user": "admin",
+       "password": "StrongPasswordHere"
+     },
+     "platform_name": "Open edX HA",
+     "platform_email": "admin@example.com"
    }
    ```
 
@@ -40,7 +69,9 @@ Use this procedure when all nodes are lost, but you have local PC backups availa
 ./deploy.sh
 ```
 
-This will set up a fresh Kubernetes cluster on your new hardware.
+This will set up a fresh Kubernetes cluster on your new hardware with:
+- Three combined master+worker nodes for distributed control plane and workloads
+- One backup node for dedicated backup operations
 
 ### Step 3: Prepare Backup for Restore
 
@@ -140,7 +171,19 @@ scp -r $LATEST_BACKUP admin@[NEW_BACKUP_NODE_IPV6]:/tmp/openedx-restore
 
 ### Step 5: Update DNS Records
 
-Update your DNS AAAA records to point to the new node IPv6 addresses.
+Update your DNS AAAA records to point to the new node IPv6 addresses:
+
+```
+school.example.com. IN AAAA 2001:db8:1::10
+school.example.com. IN AAAA 2001:db8:2::10
+school.example.com. IN AAAA 2001:db8:3::10
+
+studio.school.example.com. IN AAAA 2001:db8:1::10
+studio.school.example.com. IN AAAA 2001:db8:2::10
+studio.school.example.com. IN AAAA 2001:db8:3::10
+
+monitoring.school.example.com. IN AAAA 2001:db8:1::10
+```
 
 ### Step 6: Verify Restoration
 
@@ -170,13 +213,44 @@ If just one node has failed:
 
 2. Add a new node to replace it:
    ```bash
-   ./scripts/cluster/add-node.sh node2-new 2001:db8:2::10 admin ~/.ssh/id_rsa
+   # For a production node (master+worker)
+   ./scripts/cluster/add-node.sh node2-new 2001:db8:2::10 admin ~/.ssh/id_rsa master+worker
+
+   # For a backup node
+   ./scripts/cluster/add-node.sh node4-new 2001:db8:4::10 admin ~/.ssh/id_rsa backup
    ```
 
 3. Update DNS records if necessary:
    ```bash
    # Update the AAAA record for school.example.com to point to the new IPv6 address
    ```
+
+### Zero-Downtime Node Replacement
+
+The master+worker architecture means that even when replacing a node:
+
+1. Kubernetes control plane remains available through the other master nodes
+2. Workloads continue running on the remaining production nodes
+3. The system maintains functionality throughout the replacement process
+
+## Partial Cluster Failure
+
+In case of multiple node failures (but not complete infrastructure loss):
+
+1. Assess which nodes are still operational:
+   ```bash
+   kubectl get nodes
+   ```
+
+2. If at least one master+worker node is operational, you can rebuild the cluster from there:
+   - Keep the functioning nodes
+   - Remove the failed nodes using the script
+   - Add replacement nodes
+
+3. If the backup node failed but production nodes are operational:
+   - Add a new backup node
+   - Configure backup storage
+   - Run a manual backup to verify
 
 ## CouchDB Cluster Failure Recovery
 
@@ -212,6 +286,46 @@ If the CouchDB cluster is corrupted:
    kubectl -n openedx scale deployment cms-deployment --replicas=3
    ```
 
+## Control Plane Failure
+
+In the unlikely event that all three master+worker nodes fail simultaneously, but your data is intact:
+
+1. Identify a worker node that is still operational (backup node)
+2. Promote the worker node to a master+worker temporarily:
+   ```bash
+   ssh admin@[BACKUP_NODE_IPV6] "sudo k3s server \
+     --cluster-init \
+     --token <saved-token> \
+     --tls-san [BACKUP_NODE_IPV6]"
+   ```
+
+3. Add new master+worker nodes using the add-node.sh script
+4. Once the new master+worker nodes are operational, restore the backup node to its original role
+
+## Catastrophic Network Failure
+
+If your IPv6 Mycelium network fails:
+
+1. Check if nodes can still communicate directly via their LAN
+2. If LAN communication is possible, reconfigure the Kubernetes API server to use LAN IPs:
+   ```bash
+   ssh admin@[NODE_LAN_IP] "sudo sed -i 's/bind-address=.*/bind-address=0.0.0.0/' /etc/rancher/k3s/config.yaml && sudo systemctl restart k3s"
+   ```
+
+3. Update your kubeconfig to use LAN IPs
+4. Once network issues are resolved, revert to the original IPv6 configuration
+
 ## Emergency Contacts
 
 If you need emergency assistance with recovery, contact the website admin.
+
+## Recovery Drills
+
+It's recommended to practice these recovery procedures regularly in a test environment:
+
+1. Set up a duplicate testing environment
+2. Simulate different failure scenarios
+3. Practice the recovery steps
+4. Document any issues encountered and improvements needed
+
+Regular drills ensure your team is prepared for real emergencies and confirm that your backup and recovery processes work as expected.
