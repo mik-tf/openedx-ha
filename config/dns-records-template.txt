@@ -1,0 +1,12 @@
+# After deployment, create the following AAAA DNS records:
+
+school.example.com. IN AAAA 2001:db8:1::1
+school.example.com. IN AAAA 2001:db8:2::1
+school.example.com. IN AAAA 2001:db8:3::1
+
+studio.school.example.com. IN AAAA 2001:db8:1::1
+studio.school.example.com. IN AAAA 2001:db8:2::1
+studio.school.example.com. IN AAAA 2001:db8:3::1
+
+# Optional monitoring subdomain
+monitoring.school.example.com. IN AAAA 2001:db8:1::1

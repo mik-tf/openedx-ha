@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: couchdb
+  namespace: openedx
+spec:
+  serviceName: couchdb-service
+  replicas: 3
+  selector:
+    matchLabels:
+      app: couchdb
+  template:
+    metadata:
+      labels:
+        app: couchdb
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - couchdb
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: couchdb
+          image: couchdb:3.3.2
+          ports:
+            - containerPort: 5984
+              name: couchdb
+          env:
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: adminUsername
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: adminPassword
+            - name: COUCHDB_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: cookieAuthSecret
+            - name: ERL_FLAGS
+              value: '-setcookie "monster"'
+          volumeMounts:
+            - name: couchdb-data
+              mountPath: /opt/couchdb/data
+            - name: couchdb-config
+              mountPath: /opt/couchdb/etc/local.d
+            - name: couchdb-config-file
+              mountPath: /opt/couchdb/etc/local.d/local.ini
+              subPath: local.ini
+          resources:
+            limits:
+              memory: 2Gi
+            requests:
+              memory: 1Gi
+              cpu: 500m
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5984
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5984
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: couchdb-config-file
+          configMap:
+            name: couchdb-config
+        - name: couchdb-config
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: couchdb-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: couchdb-storage
+        resources:
+          requests:
+            storage: 10Gi

@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lms-deployment
+  namespace: openedx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: lms
+  template:
+    metadata:
+      labels:
+        app: lms
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - lms
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: lms
+          image: overhangio/openedx:14.0.3
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SERVICE_VARIANT
+              value: lms
+            - name: SETTINGS
+              value: tutor.production
+            - name: COUCHDB_HOST
+              value: couchdb-service
+            - name: COUCHDB_PORT
+              value: "5984"
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: adminUsername
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: adminPassword
+            - name: COUCHDB_DB_NAME
+              value: openedx_k8s
+          volumeMounts:
+            - name: lms-config
+              mountPath: /openedx/config.yml
+              subPath: config.yml
+            - name: storage-module
+              mountPath: /openedx/custom/storage/couchdb_storage.py
+              subPath: couchdb_storage.py
+            - name: storage-init
+              mountPath: /openedx/custom/storage/__init__.py
+              subPath: __init__.py
+          resources:
+            limits:
+              memory: 2Gi
+            requests:
+              memory: 1Gi
+              cpu: 500m
+          readinessProbe:
+            httpGet:
+              path: /heartbeat
+              port: 8000
+            initialDelaySeconds: 90
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /heartbeat
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+      volumes:
+        - name: lms-config
+          configMap:
+            name: lms-config
+        - name: storage-module
+          configMap:
+            name: storage-config
+            items:
+              - key: couchdb_storage.py
+                path: couchdb_storage.py
+        - name: storage-init
+          configMap:
+            name: storage-config
+            items:
+              - key: __init__.py
+                path: __init__.py

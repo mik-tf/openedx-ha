@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config
+  namespace: openedx
+data:
+  Caddyfile: |
+    {
+      email admin@example.com
+      acme_http
+    }
+
+    example.com {
+      tls {
+        # This will automatically obtain certificates
+      }
+
+      handle /health {
+        respond "OK" 200
+      }
+
+      handle {
+        reverse_proxy lms-service:8000
+      }
+    }
+
+    studio.example.com {
+      tls {
+        # This will automatically obtain certificates
+      }
+
+      reverse_proxy cms-service:8000
+    }
+
+    monitoring.example.com {
+      tls {
+        # This will automatically obtain certificates
+      }
+
+      basicauth {
+        admin JDJhJDEwJE1uOEV1OFVUcTVZNUNML1VzWjhPTS4vUEZoWUtzdVVvVnpnS1M2MVhuYnBIVk9xQ2JCUm1h
+      }
+
+      reverse_proxy grafana-service:3000
+    }

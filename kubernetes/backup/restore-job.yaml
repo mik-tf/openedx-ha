@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-job
+  namespace: openedx
+spec:
+  template:
+    spec:
+      containers:
+        - name: restore
+          image: curlimages/curl:7.87.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              BACKUP_DIR="/backup/daily/YYYYMMDD"  # Replace YYYYMMDD with actual date
+
+              echo "Starting restore from $BACKUP_DIR"
+
+              if [ ! -d "$BACKUP_DIR" ]; then
+                echo "Backup directory not found: $BACKUP_DIR"
+                exit 1
+              fi
+
+              # Verify backup
+              if [ ! -f "$BACKUP_DIR/backup_manifest.json" ]; then
+                echo "ERROR: No backup manifest found. This doesn't appear to be a valid backup."
+                exit 1
+              fi
+
+              # Restore each database
+              find "$BACKUP_DIR" -name "*.json" -not -name "backup_manifest.json" | while read -r db_file; do
+                db_name=$(basename "$db_file" .json)
+                echo "Restoring database: $db_name"
+
+                # Create database if it doesn't exist
+                curl -X PUT "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb-service:5984/$db_name"
+
+                # Extract documents and insert them
+                cat "$db_file" | jq -c '.rows[] | .doc' | while read -r doc; do
+                  # Skip design documents for now
+                  if [[ $(echo "$doc" | jq -r '._id') != _design* ]]; then
+                    echo "$doc" | curl -X POST "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb-service:5984/$db_name" -H "Content-Type: application/json" -d @-
+                  fi
+                done
+
+                # Now handle design documents
+                cat "$db_file" | jq -c '.rows[] | .doc' | while read -r doc; do
+                  if [[ $(echo "$doc" | jq -r '._id') == _design* ]]; then
+                    doc_id=$(echo "$doc" | jq -r '._id')
+                    echo "Restoring design document: $doc_id"
+                    echo "$doc" | curl -X PUT "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb-service:5984/$db_name/$doc_id" -H "Content-Type: application/json" -d @-
+                  fi
+                done
+              done
+
+              echo "Restore completed"
+          env:
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: adminUsername
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-secrets
+                  key: adminPassword
+          volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+      volumes:
+        - name: backup-storage
+          persistentVolumeClaim:
+            claimName: backup-pvc
+      restartPolicy: Never
+  backoffLimit: 2

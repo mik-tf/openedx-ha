@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lms-config
+  namespace: openedx
+data:
+  config.yml: |
+    PLATFORM_NAME: "$PLATFORM_NAME"
+    SITE_NAME: "$DOMAIN"
+    LMS_BASE: "$DOMAIN"
+    CMS_BASE: "studio.$DOMAIN"
+    LMS_ROOT_URL: "https://$DOMAIN"
+    CMS_ROOT_URL: "https://studio.$DOMAIN"
+
+    FEATURES:
+      ENABLE_DISCUSSION_SERVICE: true
+      ENABLE_COURSEWARE_SEARCH: true
+      ENABLE_COURSE_DISCOVERY: true
+      ENABLE_DASHBOARD_SEARCH: true
+      ENABLE_COMBINED_LOGIN_REGISTRATION: true
+      PREVIEW_LMS_BASE: "$DOMAIN"
+      ENABLE_COUCHDB: true
+
+    EMAIL_BACKEND: 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST: 'smtp.example.com'
+    EMAIL_PORT: 587
+    EMAIL_USE_TLS: true
+    EMAIL_HOST_USER: 'your-email@example.com'
+    EMAIL_HOST_PASSWORD: 'your-email-password'
+    DEFAULT_FROM_EMAIL: "$PLATFORM_EMAIL"
+
+    REGISTRATION_EXTRA_FIELDS:
+      city: hidden
+      country: hidden
+      gender: hidden
+      goals: hidden
+      honor_code: hidden
+      level_of_education: hidden
+      mailing_address: hidden
+      year_of_birth: hidden
+
+    COUCHDB_HOST: 'couchdb-service'
+    COUCHDB_PORT: 5984
+    COUCHDB_USER: "$COUCHDB_USER"
+    COUCHDB_PASSWORD: "$COUCHDB_PASSWORD"
+    COUCHDB_DB_NAME: "openedx_k8s"
+
+    DEFAULT_FILE_STORAGE: 'storage.couchdb_storage.CouchDBStorage'
+    COURSE_IMPORT_EXPORT_STORAGE: 'storage.couchdb_storage.CouchDBStorage'
+    VIDEO_TRANSCRIPTS_STORAGE: 'storage.couchdb_storage.CouchDBStorage'
+    GRADES_DOWNLOAD_STORAGE: 'storage.couchdb_storage.CouchDBStorage'

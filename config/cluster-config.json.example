@@ -1,0 +1,39 @@
+{
+  "domain": "school.example.com",
+  "nodes": [
+    {
+      "name": "node1",
+      "ipv6": "2001:db8:1::1",
+      "user": "admin",
+      "role": "master",
+      "ssh_key_path": "~/.ssh/id_rsa"
+    },
+    {
+      "name": "node2",
+      "ipv6": "2001:db8:2::1",
+      "user": "admin",
+      "role": "worker",
+      "ssh_key_path": "~/.ssh/id_rsa"
+    },
+    {
+      "name": "node3",
+      "ipv6": "2001:db8:3::1",
+      "user": "admin",
+      "role": "worker",
+      "ssh_key_path": "~/.ssh/id_rsa"
+    },
+    {
+      "name": "node4",
+      "ipv6": "2001:db8:4::1",
+      "user": "admin",
+      "role": "backup",
+      "ssh_key_path": "~/.ssh/id_rsa"
+    }
+  ],
+  "couchdb": {
+    "user": "admin",
+    "password": "StrongPasswordHere"
+  },
+  "platform_name": "Open edX HA",
+  "platform_email": "admin@example.com"
+}

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: couchdb-config
+  namespace: openedx
+data:
+  local.ini: |
+    [couchdb]
+    single_node=false
+    max_document_size=200000000
+
+    [cluster]
+    q=8
+    n=3
+
+    [couch_httpd_auth]
+    secret = ${COUCHDB_SECRET}
+
+    [chttpd]
+    bind_address = 0.0.0.0
+    port = 5984
+    require_valid_user = false
+
+    [httpd]
+    enable_cors = true
+
+    [cors]
+    origins = *

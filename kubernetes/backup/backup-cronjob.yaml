@@ -1,0 +1,179 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-backup
+  namespace: openedx
+spec:
+  schedule: "0 1 * * *" # Every day at 1 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: curlimages/curl:7.87.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  DATE=$(date +%Y%m%d)
+                  BACKUP_DIR="/backup/daily/$DATE"
+                  mkdir -p "$BACKUP_DIR"
+
+                  echo "Starting daily backup at $(date)"
+
+                  # Get CouchDB databases
+                  DBS=$(curl -s -X GET "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb-service:5984/_all_dbs")
+
+                  # Backup each database
+                  echo $DBS | jq -r '.[]' | while read -r db; do
+                    echo "Backing up database: $db"
+                    curl -s "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@couchdb-service:5984/$db/_all_docs?include_docs=true" > "$BACKUP_DIR/${db}.json"
+                  done
+
+                  # Backup configuration
+                  echo "Backing up configuration"
+                  kubectl get configmap -n openedx -o yaml > "$BACKUP_DIR/configmaps.yaml"
+                  kubectl get secret -n openedx -o yaml > "$BACKUP_DIR/secrets.yaml"
+
+                  # Create backup manifest
+                  cat > "$BACKUP_DIR/backup_manifest.json" << EOF
+                  {
+                    "backup_date": "$(date -Iseconds)",
+                    "backup_type": "daily",
+                    "checksum": "$(find $BACKUP_DIR -type f -not -name backup_manifest.json -exec md5sum {} \; | sort | md5sum | cut -d' ' -f1)"
+                  }
+                  EOF
+
+                  # Cleanup old backups (keep 7 days)
+                  find /backup/daily -maxdepth 1 -type d -name "20*" -mtime +7 -exec rm -rf {} \;
+
+                  echo "Daily backup completed at $(date)"
+              env:
+                - name: COUCHDB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: couchdb-secrets
+                      key: adminUsername
+                - name: COUCHDB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: couchdb-secrets
+                      key: adminPassword
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+          restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-backup
+  namespace: openedx
+spec:
+  schedule: "0 2 * * 0" # Every Sunday at 2 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: curlimages/curl:7.87.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  WEEK=$(date +%Y-week%U)
+                  LATEST_DAILY=$(find /backup/daily -maxdepth 1 -type d -name "20*" | sort -r | head -1)
+
+                  if [ -z "$LATEST_DAILY" ]; then
+                    echo "No daily backup found, cannot create weekly backup"
+                    exit 1
+                  fi
+
+                  echo "Creating weekly backup from $LATEST_DAILY"
+
+                  # Create weekly backup directory
+                  mkdir -p "/backup/weekly/$WEEK"
+
+                  # Copy latest daily backup
+                  cp -a "$LATEST_DAILY"/* "/backup/weekly/$WEEK/"
+
+                  # Update manifest
+                  sed -i 's/"backup_type": "daily"/"backup_type": "weekly"/' "/backup/weekly/$WEEK/backup_manifest.json"
+
+                  # Cleanup old weekly backups (keep 4 weeks)
+                  find /backup/weekly -maxdepth 1 -type d -mtime +28 -exec rm -rf {} \;
+
+                  echo "Weekly backup completed"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+          restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: monthly-backup
+  namespace: openedx
+spec:
+  schedule: "0 3 1 * *" # First day of each month at 3 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: curlimages/curl:7.87.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  MONTH=$(date +%Y-%m)
+                  LATEST_WEEKLY=$(find /backup/weekly -maxdepth 1 -type d -name "20*" | sort -r | head -1)
+
+                  if [ -z "$LATEST_WEEKLY" ]; then
+                    echo "No weekly backup found, cannot create monthly backup"
+                    exit 1
+                  fi
+
+                  echo "Creating monthly backup from $LATEST_WEEKLY"
+
+                  # Create monthly backup directory
+                  mkdir -p "/backup/monthly/$MONTH"
+
+                  # Copy latest weekly backup
+                  cp -a "$LATEST_WEEKLY"/* "/backup/monthly/$MONTH/"
+
+                  # Update manifest
+                  sed -i 's/"backup_type": "weekly"/"backup_type": "monthly"/' "/backup/monthly/$MONTH/backup_manifest.json"
+
+                  # Cleanup old monthly backups (keep 12 months)
+                  find /backup/monthly -maxdepth 1 -type d -mtime +365 -exec rm -rf {} \;
+
+                  echo "Monthly backup completed"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc
+          restartPolicy: OnFailure
