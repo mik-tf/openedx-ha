@@ -5,34 +5,34 @@
 This Open edX deployment implements a high-availability architecture with no single point of failure (SPOF) using Kubernetes (k3s), CouchDB clustering, and DNS-based load balancing on custom hardware.
 
 ```
-DNS Round-Robin (AAAA records)
-                   school.example.com
+
+                   DNS Round-Robin (AAAA Records)
+                   your-domain.com
                          │
            ┌─────────────┼─────────────┐
            │             │             │
      ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐
-     │       Node1         │       Node2      │ │      Node3       │
+     │    VM1    │ │    VM2    │ │    VM3    │
      ├───────────┤ ├───────────┤ ├───────────┤
-     │ K3s Master       │ │ K3s Master        │ │ K3s Master │
-     │ K3s Worker       │ │ K3s Worker        │ │ K3s Worker │
-     │ Open edX         │ │ Open edX          │ │ Open edX   │
-     │ CouchDB        ◄┼─┤ CouchDB           ├─► CouchDB    │
-     │ Caddy            │ │ Caddy             │ │ Caddy      │
+     │    K3s    | │    K3s    | │    K3s    |
+     ├───────────┤ ├───────────┤ ├───────────┤
+     │ Open edX  │ │ Open edX  │ │ Open edX  │
+     │ CouchDB   │◄┼─CouchDB───┼►│ CouchDB   │
      └───────────┘ └───────────┘ └───────────┘
                                         │
                                         ▼
                                ┌─────────────┐
-                               │   Node4              │
+                               │  Backup VM  │
                                ├─────────────┤
-                               │ K3s Worker           │
-                               │ Backup               │
+                               │ K3s Worker  |
                                └─────────────┘
                                         │
                                         ▼
                                ┌─────────────┐
-                               │  Local PC            │
-                               │  Backup              │
+                               │  Local PC   │
+                               │  Backup     │
                                └─────────────┘
+
 ```
 
 ## Components
