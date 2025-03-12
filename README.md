@@ -63,4 +63,4 @@ See the [detailed deployment guide](docs/deployment.md) for complete instruction
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the [MIT License](LICENSE).
