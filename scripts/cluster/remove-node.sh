@@ -13,29 +13,60 @@ fi
 NODE_NAME=$1
 
 # Check if node exists in config
-NODE_INFO=$(jq -r --arg name "$NODE_NAME" '.nodes[] | select(.name==$name) | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path + "," + .role' "$CONFIG_FILE")
+NODE_INFO=$(jq -r --arg name "$NODE_NAME" '.nodes[] | select(.name==$name) | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path + "," + .role + "," + (.is_first_master|tostring)' "$CONFIG_FILE")
 if [ -z "$NODE_INFO" ]; then
     echo "Error: Node $NODE_NAME not found in configuration"
     exit 1
 fi
 
-IFS=',' read -r _ NODE_IPV6 NODE_USER NODE_KEY NODE_ROLE <<< "$NODE_INFO"
+IFS=',' read -r _ NODE_IPV6 NODE_USER NODE_KEY NODE_ROLE IS_FIRST_MASTER <<< "$NODE_INFO"
 
-echo "Removing node $NODE_NAME ([$NODE_IPV6]) from the cluster..."
+echo "Removing node $NODE_NAME ([$NODE_IPV6]) with role $NODE_ROLE from the cluster..."
+
+# Check if this is the first master - we cannot remove it without reconfiguring the cluster
+if [ "$IS_FIRST_MASTER" == "true" ]; then
+    echo "ERROR: Cannot remove the first master node ($NODE_NAME) without reconfiguring the entire cluster."
+    echo "Please promote another master node to be the first master before removing this node."
+    exit 1
+fi
 
 # Get master node info
-MASTER_NODE=$(jq -r '.nodes[] | select(.role=="master") | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE")
+MASTER_NODE=$(jq -r '.nodes[] | select(.is_first_master==true) | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE")
 IFS=',' read -r MASTER_NAME MASTER_IPV6 MASTER_USER MASTER_KEY <<< "$MASTER_NODE"
 
 # Get node name in kubernetes
 NODE_K8S_NAME=$(ssh -i "$MASTER_KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IPV6" "sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get nodes -o wide | grep $NODE_IPV6 | awk '{print \$1}'")
 
 if [ ! -z "$NODE_K8S_NAME" ]; then
-    # Drain and delete node from kubernetes
-    ssh -i "$MASTER_KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IPV6" "
-        sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml drain $NODE_K8S_NAME --ignore-daemonsets --delete-emptydir-data --force
-        sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml delete node $NODE_K8S_NAME
-    "
+    # Special handling for master nodes
+    if [[ "$NODE_ROLE" == "master" || "$NODE_ROLE" == "master+worker" ]]; then
+        echo "Removing a master node ($NODE_K8S_NAME)..."
+
+        # Count remaining masters to ensure we don't remove too many
+        MASTER_COUNT=$(jq -r '.nodes[] | select(.role=="master" or .role=="master+worker") | .name' "$CONFIG_FILE" | wc -l)
+        if [ "$MASTER_COUNT" -le 2 ]; then
+            echo "WARNING: Removing this master will leave you with less than 2 masters."
+            echo "This will compromise the high-availability of your control plane."
+            read -p "Do you want to continue? (y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "Node removal cancelled."
+                exit 0
+            fi
+        fi
+
+        # Drain the node with a longer timeout for master components
+        ssh -i "$MASTER_KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IPV6" "
+            sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml drain $NODE_K8S_NAME --ignore-daemonsets --delete-emptydir-data --force --timeout=120s
+            sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml delete node $NODE_K8S_NAME
+        "
+    else
+        # Standard drain and delete for worker nodes
+        ssh -i "$MASTER_KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IPV6" "
+            sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml drain $NODE_K8S_NAME --ignore-daemonsets --delete-emptydir-data --force
+            sudo kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml delete node $NODE_K8S_NAME
+        "
+    fi
 fi
 
 # Uninstall k3s from the node
@@ -56,10 +87,9 @@ DOMAIN=$(jq -r '.domain' "$CONFIG_FILE")
 echo "Node $NODE_NAME removed from the cluster successfully!"
 echo "Please update your DNS records according to the updated config/dns-records.txt file"
 
-# If this was a master node, we need to inform about reconfiguring the cluster
-if [ "$NODE_ROLE" == "master" ]; then
+# Special message for backup node removal
+if [[ "$NODE_ROLE" == "backup" ]]; then
     echo ""
-    echo "WARNING: You have removed a master node. You will need to reconfigure the cluster."
-    echo "It is recommended to set up a new master node using add-node.sh with role=master"
-    echo "and then redeploy the application."
+    echo "WARNING: You have removed the backup node. Make sure to configure another node"
+    echo "for backups or add a new backup node to maintain your backup strategy."
 fi

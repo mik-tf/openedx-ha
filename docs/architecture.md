@@ -2,36 +2,36 @@
 
 ## Overview
 
-This Open edX deployment implements a high-availability architecture using Kubernetes (k3s), CouchDB clustering, and DNS-based load balancing on custom hardware.
+This Open edX deployment implements a high-availability architecture with no single point of failure (SPOF) using Kubernetes (k3s), CouchDB clustering, and DNS-based load balancing on custom hardware.
 
 ```
-                   DNS Round-Robin (AAAA records)
+DNS Round-Robin (AAAA records)
                    school.example.com
                          │
            ┌─────────────┼─────────────┐
            │             │             │
      ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐
-     │   Node1   │ │   Node2   │ │   Node3   │
+     │       Node1         │       Node2      │ │      Node3       │
      ├───────────┤ ├───────────┤ ├───────────┤
-     │ Kubernetes│ │ Kubernetes│ │ Kubernetes│
-     ├───────────┤ ├───────────┤ ├───────────┤
-     │ Open edX  │ │ Open edX  │ │ Open edX  │
-     │ CouchDB   │◄┼─CouchDB───┼►│ CouchDB   │
-     │ Caddy     │ │ Caddy     │ │ Caddy     │
+     │ K3s Master       │ │ K3s Master        │ │ K3s Master │
+     │ K3s Worker       │ │ K3s Worker        │ │ K3s Worker │
+     │ Open edX         │ │ Open edX          │ │ Open edX   │
+     │ CouchDB        ◄┼─┤ CouchDB           ├─► CouchDB    │
+     │ Caddy            │ │ Caddy             │ │ Caddy      │
      └───────────┘ └───────────┘ └───────────┘
                                         │
                                         ▼
                                ┌─────────────┐
-                               │   Node4    │
+                               │   Node4              │
                                ├─────────────┤
-                               │ Kubernetes │
-                               │ Backup     │
+                               │ K3s Worker           │
+                               │ Backup               │
                                └─────────────┘
                                         │
                                         ▼
                                ┌─────────────┐
-                               │  Local PC   │
-                               │  Backup     │
+                               │  Local PC            │
+                               │  Backup              │
                                └─────────────┘
 ```
 

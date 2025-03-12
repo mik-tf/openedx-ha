@@ -1,21 +1,72 @@
-MIT License
+# Open edX High Availability Kubernetes Deployment
 
-Copyright (c) 2025 ThreeFold
+This project provides a complete solution for deploying Open edX in a high-availability configuration using Kubernetes (k3s) on a 4-node cluster with Mycelium IPv6 networking.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## Zero-SPOF Architecture
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This deployment has been carefully designed to eliminate all single points of failure:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+- **Distributed Control Plane**: Multiple Kubernetes master nodes ensure continuous orchestration
+- **Redundant Application Tier**: Multiple replicas of all services distributed across physical nodes
+- **Clustered Database**: CouchDB deployed as a multi-node cluster with automatic data replication
+- **DNS Round-Robin**: Simple yet effective load balancing without additional infrastructure
+- **Multi-Tiered Backup**: Server-side and off-site backup strategy with automated verification
+- **Network Redundancy**: IPv6-based routing with multiple entry points
+- **Geographic Distribution**: Nodes can be physically distributed for maximum resilience
+
+Every component in the system has been configured with redundancy, ensuring that any individual component can fail without affecting overall system availability.
+
+## Features
+
+- **High Availability**: No single point of failure, redundant data storage
+- **Self-Healing**: Kubernetes controllers automatically recover failed components
+- **Zero-Downtime Updates**: Rolling deployment strategies for continuous operation
+- **Infrastructure as Code**: Complete deployment scripts
+- **Comprehensive Backup**: Server-side and local backup options
+- **IPv6 Ready**: Works with Mycelium overlay network
+- **Geographic Distribution**: Nodes can be physically distributed
+
+## Prerequisites
+
+- 4 mini Ubuntu 24.04 PCs with IPv6 connectivity via Mycelium
+  - For more information consult this [Mycelium cluster repo](https://github.com/mik-tf/mcluster) and this [ISO Boot Maker repo](https://github.com/mik-tf/isobootmaker)
+- SSH access to all nodes
+- A domain name with access to DNS settings
+- Basic understanding of Kubernetes concepts
+
+## Quick Start
+
+1. **Clone this repository**:
+   ```bash
+   git clone https://github.com/mik-tf/openedx-ha.git
+   cd openedx-ha
+   ```
+
+2. **Configure your cluster**:
+   ```bash
+   cp config/cluster-config.json.example config/cluster-config.json
+   # Edit cluster-config.json with your node details
+   ```
+
+3. **Deploy the cluster**:
+   ```bash
+   ./deploy.sh
+   ```
+
+4. **Configure DNS**:
+   Add AAAA records for your domain pointing to your three production nodes' IPv6 addresses as shown in `config/dns-records.txt`.
+
+See the [detailed deployment guide](docs/deployment.md) for complete instructions.
+
+## Documentation
+
+- [Architecture Details](docs/architecture.md)
+- [Deployment Guide](docs/deployment.md)
+- [Operations Manual](docs/operations.md)
+- [Backup and Restore](docs/backup.md)
+- [Disaster Recovery](docs/disaster-recovery.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

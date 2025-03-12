@@ -5,26 +5,29 @@
       "name": "node1",
       "ipv6": "2001:db8:1::1",
       "user": "admin",
-      "role": "master",
+      "role": "master+worker",
+      "is_first_master": true,
       "ssh_key_path": "~/.ssh/id_rsa"
     },
     {
       "name": "node2",
-      "ipv6": "2001:db8:2::1",
+      "ipv6": "2001:db8:1::2",
       "user": "admin",
-      "role": "worker",
+      "role": "master+worker",
+      "is_first_master": false,
       "ssh_key_path": "~/.ssh/id_rsa"
     },
     {
       "name": "node3",
-      "ipv6": "2001:db8:3::1",
+      "ipv6": "2001:db8:1::3",
       "user": "admin",
-      "role": "worker",
+      "role": "master+worker",
+      "is_first_master": false,
       "ssh_key_path": "~/.ssh/id_rsa"
     },
     {
       "name": "node4",
-      "ipv6": "2001:db8:4::1",
+      "ipv6": "2001:db8:1::4",
       "user": "admin",
       "role": "backup",
       "ssh_key_path": "~/.ssh/id_rsa"

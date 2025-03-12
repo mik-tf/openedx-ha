@@ -1,4 +1,6 @@
 #!/bin/bash
+# Modified deploy.sh for 3 master+worker nodes and 1 backup node
+
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,29 +24,32 @@ echo "Step 1: Installing dependencies..."
 echo "Step 2: Generating Kubernetes configurations..."
 "$SCRIPT_DIR/scripts/generate-configs.sh" "$CONFIG_FILE"
 
-# Setup k3s cluster
+# Setup first master+worker node
 echo "Step 3: Setting up k3s cluster..."
-MASTER_NODE=$(jq -r '.nodes[] | select(.role=="master") | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE")
-IFS=',' read -r MASTER_NAME MASTER_IPV6 MASTER_USER MASTER_KEY <<< "$MASTER_NODE"
+FIRST_MASTER=$(jq -r '.nodes[] | select(.is_first_master==true) | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE")
+IFS=',' read -r MASTER_NAME MASTER_IPV6 MASTER_USER MASTER_KEY <<< "$FIRST_MASTER"
 
-echo "Setting up master node on $MASTER_NAME ($MASTER_IPV6)..."
-"$SCRIPT_DIR/scripts/cluster/setup-k3s-master.sh" "$MASTER_IPV6" "$MASTER_USER" "$MASTER_KEY"
+echo "Setting up first master+worker node on $MASTER_NAME ($MASTER_IPV6)..."
+"$SCRIPT_DIR/scripts/cluster/setup-k3s-master-worker.sh" "$MASTER_IPV6" "$MASTER_USER" "$MASTER_KEY"
 
 # Get k3s token from master
 TOKEN=$(ssh -i "$MASTER_KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IPV6" "sudo cat /var/lib/rancher/k3s/server/node-token")
 
-# Setup worker nodes
-for WORKER in $(jq -r '.nodes[] | select(.role=="worker") | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE"); do
-    IFS=',' read -r WORKER_NAME WORKER_IPV6 WORKER_USER WORKER_KEY <<< "$WORKER"
-    echo "Setting up worker node on $WORKER_NAME ($WORKER_IPV6)..."
-    "$SCRIPT_DIR/scripts/cluster/setup-k3s-worker.sh" "$WORKER_IPV6" "$WORKER_USER" "$WORKER_KEY" "$MASTER_IPV6" "$TOKEN"
+# Setup other master+worker nodes
+for NODE in $(jq -r '.nodes[] | select(.role=="master+worker" and .is_first_master==false) | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE"); do
+    IFS=',' read -r NODE_NAME NODE_IPV6 NODE_USER NODE_KEY <<< "$NODE"
+    echo "Setting up additional master+worker node on $NODE_NAME ($NODE_IPV6)..."
+    "$SCRIPT_DIR/scripts/cluster/setup-k3s-additional-master.sh" "$NODE_IPV6" "$NODE_USER" "$NODE_KEY" "$MASTER_IPV6" "$TOKEN"
 done
 
-# Setup backup node
+# Setup backup worker node
 BACKUP_NODE=$(jq -r '.nodes[] | select(.role=="backup") | .name + "," + .ipv6 + "," + .user + "," + .ssh_key_path' "$CONFIG_FILE")
 IFS=',' read -r BACKUP_NAME BACKUP_IPV6 BACKUP_USER BACKUP_KEY <<< "$BACKUP_NODE"
-echo "Setting up backup node on $BACKUP_NAME ($BACKUP_IPV6)..."
+echo "Setting up backup worker node on $BACKUP_NAME ($BACKUP_IPV6)..."
 "$SCRIPT_DIR/scripts/cluster/setup-k3s-worker.sh" "$BACKUP_IPV6" "$BACKUP_USER" "$BACKUP_KEY" "$MASTER_IPV6" "$TOKEN"
+
+# Create specialized directory on backup node
+ssh -i "$BACKUP_KEY" -o StrictHostKeyChecking=no "$BACKUP_USER@$BACKUP_IPV6" "sudo mkdir -p /opt/k3s/storage/backup && sudo chmod 777 /opt/k3s/storage/backup"
 
 # Copy kubeconfig to local machine
 echo "Step 4: Configuring kubectl on local machine..."
